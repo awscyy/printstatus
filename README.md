@@ -67,6 +67,8 @@ For a failed release, rerun the job or run the Release workflow manually from `m
 
 The repository-scoped runner is `mac-mini-printstatus`, labelled `self-hosted`, `macOS`, `ARM64`, `mac-mini`, and `printstatus`. It runs as `mini` through a LaunchAgent from `~/ci/actions-runner-printstatus`, with workspaces in `~/ci/printstatus`. Xcode/Swift, Homebrew, `gh`, `actionlint`, and Ruby must be on its PATH. The existing org runners and their public-repository restriction are unchanged.
 
+The runner LaunchAgent must inherit `mini`'s logged-in security session: remove the generated `SessionCreate` property from `~/Library/LaunchAgents/actions.runner.awscyy-printstatus.mac-mini-printstatus.plist` if reinstalling the service, then restart it with `./svc.sh stop` and `./svc.sh start`. A separate security session cannot read the login Keychain credentials and makes signing fail. After a reboot, `mini` must be logged in with its login Keychain unlocked.
+
 Apple credentials remain in this Mac's Keychains. The app release uses the workflow's repository-scoped `GITHUB_TOKEN`. The tap push uses the runner account's existing `gh` Keychain login via Git's credential helper, because organisation policy disables deploy keys. That login needs write access to `awscyy/homebrew-taps`; no personal token or signing key is copied into GitHub Actions secrets.
 
 **Trust boundary:** this is a persistent host with signing and GitHub credentials. Workflows intentionally do not run on pull requests or arbitrary branch pushes. Review contributions before merging; only trusted maintainers should have write access to `main`, tags, and workflows. A separate runner registration scopes scheduling, not OS-level access: it still runs as the same `mini` user.

@@ -39,4 +39,6 @@ test "$(plutil -extract CFBundleShortVersionString raw "$VERIFY/PrintStatus.app/
 codesign --verify --deep --strict "$VERIFY/PrintStatus.app"
 xcrun stapler validate "$VERIFY/PrintStatus.app"
 spctl --assess --type execute --verbose=2 "$VERIFY/PrintStatus.app"
-lipo -verify_arch arm64 x86_64 "$VERIFY/PrintStatus.app/Contents/MacOS/PrintStatus"
+for arch in arm64 x86_64; do
+    lipo -verify_arch "$arch" "$VERIFY/PrintStatus.app/Contents/MacOS/PrintStatus"
+done
