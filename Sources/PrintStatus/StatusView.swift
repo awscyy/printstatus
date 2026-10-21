@@ -15,8 +15,11 @@ struct StatusView: View {
     @ObservedObject var store: ConnectStore
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Label("PrintStatus", systemImage: "printer.fill").font(.headline)
+                if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                    Text("v\(version)").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
                 if store.refreshing { ProgressView().controlSize(.small) }
             }
