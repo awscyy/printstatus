@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release or retry (e.g. v1.3)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Serialize releases and tap updates; never interrupt notarization to start another release.
+concurrency:
+  group: printstatus-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, ARM64, printstatus]
+    timeout-minutes: 120
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_REPO: awscyy/printstatus
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate tag syntax before checkout
+        run: '[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release belongs to main and matches app version
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          test "$RELEASE_TAG" = "v$(plutil -extract CFBundleShortVersionString raw Resources/Info.plist)"
+      - name: Test
+        run: swift test
+      - name: Build, sign, notarize, staple and publish
+        run: bash scripts/publish-release.sh "$RELEASE_TAG"
+      - name: Check out public Homebrew tap
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: awscyy/homebrew-taps
+          ref: main
+          path: homebrew-taps
+          persist-credentials: false
+      - name: Update cask from the published archive
+        run: |
+          version="${RELEASE_TAG#v}"
+          ruby scripts/update-cask.rb "$version" "dist/PrintStatus-$version.zip" homebrew-taps/Casks/printstatus.rb
+          git -C homebrew-taps add Casks/printstatus.rb
+          if ! git -C homebrew-taps diff --cached --quiet; then
+            git -C homebrew-taps -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Update PrintStatus to $version"
+            # GITHUB_TOKEN is scoped to printstatus. Cross-repository publishing uses
+            # the mini account's existing gh Keychain login, never copied to a secret.
+            env -u GH_TOKEN -u GITHUB_TOKEN git -C homebrew-taps \
+              -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+              push origin HEAD:main
+          fi

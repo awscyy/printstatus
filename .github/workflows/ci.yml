@@ -1,0 +1,30 @@
+name: CI
+
+# Only reviewed code runs on the persistent signing host. Never run fork PRs here.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, ARM64, printstatus]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test and build universal app
+        run: |
+          swift test
+          actionlint
+          for script in scripts/*.sh; do bash -n "$script"; done
+          ruby -c scripts/update-cask.rb
+          plutil -lint Resources/Info.plist
+          bash scripts/build-app.sh
