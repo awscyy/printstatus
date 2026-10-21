@@ -33,7 +33,7 @@ File.write(destination, <<~CASK)
     desc "Menu bar status and model previews for Prusa Connect printers"
     homepage "https://github.com/awscyy/printstatus"
 
-    depends_on macos: ">= :sonoma"
+    depends_on macos: :sonoma
 
     app "PrintStatus.app"
 
