@@ -27,11 +27,11 @@ final class ConnectStore: NSObject, ObservableObject, WKNavigationDelegate {
     var onVerified: (() -> Void)?
     #endif
 
-    override init() {
+    init(websiteDataStore: WKWebsiteDataStore = WKWebsiteDataStore(forIdentifier:
+        UUID(uuidString: "7E720F07-747A-47F1-A2C3-AD4C8F8A2B5A")!)) {
         let configuration = WKWebViewConfiguration()
         // A dedicated persistent browser profile, managed by WebKit, never exported.
-        configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier:
-            UUID(uuidString: "7E720F07-747A-47F1-A2C3-AD4C8F8A2B5A")!)
+        configuration.websiteDataStore = websiteDataStore
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 980, height: 760), configuration: configuration)
         super.init()
         webView.navigationDelegate = self
@@ -132,7 +132,18 @@ final class ConnectStore: NSObject, ObservableObject, WKNavigationDelegate {
             let result = try await webView.callAsyncJavaScript("""
                 const printers = [];
                 let offset = 0;
-                const token = localStorage.getItem('auth.access_token');
+                let token = localStorage.getItem('auth.access_token');
+                // The OAuth callback finishes loading before the SPA stores its token.
+                // Wait locally, without sending unauthenticated requests or restarting OAuth.
+                if (!token && location.pathname.startsWith('/login/')) {
+                    if (location.pathname !== '/login/auth-callback') return 'PENDING';
+                    const deadline = Date.now() + 15000;
+                    while (!token && Date.now() < deadline) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        token = localStorage.getItem('auth.access_token');
+                    }
+                    if (!token) return 'PENDING';
+                }
                 do {
                     const controller = new AbortController();
                     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -159,6 +170,7 @@ final class ConnectStore: NSObject, ObservableObject, WKNavigationDelegate {
                 """, arguments: [:], in: nil, contentWorld: .defaultClient)
             guard requestGeneration == generation, !signedOut else { return }
             guard let json = result as? String else { throw ConnectError.format }
+            if json == "PENDING" { return }
             if json == "AUTH" {
                 message = "Your Prusa session has expired. Reconnecting…"
                 if !recoveringSession {

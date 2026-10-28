@@ -9,5 +9,6 @@ let package = Package(
         .target(name: "PrinterCore"),
         .executableTarget(name: "PrintStatus", dependencies: ["PrinterCore"]),
         .testTarget(name: "PrinterCoreTests", dependencies: ["PrinterCore"]),
+        .testTarget(name: "PrintStatusTests", dependencies: ["PrintStatus"]),
     ]
 )
